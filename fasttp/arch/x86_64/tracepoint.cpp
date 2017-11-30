@@ -124,24 +124,81 @@ namespace
         return res;
     };
 
+    int32_t generate(const condition& cond, uint8_t value)
+    {
+        uint8_t res[cond.size()];
+
+        for(size_t i = 0; i < cond.size(); ++i)
+        {
+            if(cond[i])
+                res[i] = cond[i].value();
+            else
+                res[i] = value;
+        }
+
+        return *reinterpret_cast<int32_t*>(res);
+    }
+
+    bool respects(int32_t rel, const condition& cond)
+    {
+        uint8_t bytes[4];
+        memcpy(bytes, &rel, 4);
+        for(size_t i = 0; i < 4; ++i)
+        {
+            if(cond[i] && cond[i].value() != bytes[i])
+                return false;
+        }
+        return true;
+    }
+
+    uintptr_t find_location(uintptr_t from, const address_range& zone, const condition& cond)
+    {
+        uint8_t res_tab[4]{};
+        auto res_ptr = reinterpret_cast<int32_t*>(res_tab);
+        range<int32_t> to{
+            calc_jmp(from, zone.start).value(),
+            calc_jmp(from, zone.end).value()
+        };
+
+        for(size_t i = 0; i < 4; ++i)
+        {
+            if (cond[i])
+            {
+                res_tab[i] = cond[i].value();
+            }
+        }
+        for(size_t i = 0; i < 4; ++i)
+        {
+            if(!cond[i])
+            {
+                for(int v = 0; v < 256; ++v)
+                {
+                    res_tab[i] = v;
+                    if(to.contains(*res_ptr))
+                        return from + 5 + *res_ptr;
+                    if(abs(*res_ptr - to.start) <= (1 << (8*i)))
+                        break;
+                }
+            }
+        }
+        if(to.contains(*res_ptr))
+            return from + 5 + *res_ptr;
+        else
+            return 0;
+    }
+
     uintptr_t find_location(uintptr_t from, const address_range& zone, const address_range& range, const condition& cond)
     {
-        if(range.contains(zone.start))
-        {
-            return zone.start;
-        }
-        else if(range.contains(zone.end - PAGE_SIZE))
-        {
-            return zone.end - PAGE_SIZE;
-        }
-        else if(zone.contains(range))
-        {
-            return range.start;
-        }
-        else
-        {
+        address_range cond_range{
+            from + 5 + generate(cond, 0),
+            from + 5 + generate(cond, 0xff) + 1
+        };
+
+        address_range inter = cond_range.intersection(zone).intersection(range);
+        if(inter.size() == 0)
             return 0;
-        }
+
+        return find_location(from, inter, cond);
     }
 
     uintptr_t find_location(uintptr_t from, const process::process& proc, address_range range, const condition& cond)
@@ -208,6 +265,7 @@ void arch_tracepoint::do_insert(const context *ctx)
         cond = make_condition(_location.as_int(), ool);
     }
     auto loc = find_location(_location.as_int(), ctx->process(), make_address_range(_location.as_int(), 2_G - 5 - _handler_size), cond);
+    printf("Location %lx\n", loc);
     if(loc == 0)
     {
         throw fasttp_error("Could not find space for tracepoint");

@@ -26,6 +26,8 @@ namespace dyntrace::process
 
     struct zone : address_range
     {
+        zone(uintptr_t _start = 0, uintptr_t _end = 0, permissions _perms = permissions::none, std::string _bin = {}) noexcept
+            : address_range{_start, _end}, perms{_perms}, bin{std::move(_bin)} {}
         permissions perms;
         std::string bin;
     };

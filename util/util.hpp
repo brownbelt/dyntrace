@@ -105,10 +105,17 @@ namespace dyntrace
     template<typename UInt>
     struct range
     {
-        static_assert(std::is_unsigned_v<UInt>, "Type must be unsigned");
+        UInt start;
+        UInt end;
 
-        UInt start{0};
-        UInt end{std::numeric_limits<UInt>::max()};
+        constexpr range(UInt _start = 0, UInt _end = std::numeric_limits<UInt>::max()) noexcept
+            : start{_start}, end{_end}
+        {
+            if(start > end)
+            {
+                std::swap(start, end);
+            }
+        }
 
         constexpr bool contains(UInt v) const noexcept
         {
@@ -130,6 +137,17 @@ namespace dyntrace
         constexpr UInt size() const noexcept
         {
             return end - start;
+        }
+
+        template<typename UInt2>
+        constexpr range<UInt> intersection(const range<UInt2>& r) const noexcept
+        {
+            if(!contains(r) && !r.contains(*this) && !crosses(r))
+                return {};
+            return range<UInt>{
+                start < r.start ? r.start : start,
+                end > r.end ? r.end : end
+            };
         }
     };
     using address_range = range<uintptr_t>;
