@@ -265,7 +265,6 @@ void arch_tracepoint::do_insert(const context *ctx)
         cond = make_condition(_location.as_int(), ool);
     }
     auto loc = find_location(_location.as_int(), ctx->process(), make_address_range(_location.as_int(), 2_G - 5 - _handler_size), cond);
-    printf("Location %lx\n", loc);
     if(loc == 0)
     {
         throw fasttp_error("Could not find space for tracepoint");
